@@ -19,6 +19,69 @@ Parameters:
     Description: Enter the size of the EBS volume in GB.
 
 Resources:
+
+  S3Bucket:
+    Type: "AWS::S3::Bucket"
+
+  PersonalizeS3Policy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          - Sid: PersonalizeAcess
+            Effect: Allow
+            Principal:
+              Service: 'personalize.amazonaws.com'
+            Action:
+              - 's3:GetObject'
+            Resource:
+              - !Join
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref S3Bucket
+                  - /*
+          - Sid: PersonalizeList
+            Effect: Allow
+            Principal:
+              Service: 'personalize.amazonaws.com'
+            Action:
+              - 's3:ListBucket'
+            Resource:
+              - !Join
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref S3Bucket
+
+  PersonalizeRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - personalize.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonPersonalizeFullAccess
+        - arn:aws:iam::aws:policy/CloudWatchFullAccess
+      Policies:
+        - PolicyName: PersonalizeS3BucketAccessPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !Join
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - !Ref S3Bucket
+                      - '*'
+
   # SageMaker Execution Role
   SageMakerIamRole:
     Type: "AWS::IAM::Role"
@@ -34,9 +97,21 @@ Resources:
       Path: "/"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
-        - "arn:aws:iam::aws:policy/AmazonS3FullAccess"
         - "arn:aws:iam::aws:policy/service-role/AmazonPersonalizeFullAccess"
-        - "arn:aws:iam::aws:policy/IAMFullAccess"
+      Policies:
+        - PolicyName: SMS3BucketAccessPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !Join
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - !Ref S3Bucket
+                      - /*
 
   # SageMaker notebook
   NotebookInstance:
@@ -47,3 +122,10 @@ Resources:
       RoleArn: !GetAtt SageMakerIamRole.Arn
       VolumeSizeInGB: !Ref VolumeSize
       DefaultCodeRepository: https://github.com/aws-samples/amazon-personalize-samples.git 
+Outputs:
+  S3BucketName:
+    Description: The S3 bucket name
+    Value: !Ref S3Bucket
+  PersonalizeRole:
+    Description: The Personalize Role
+    Value: !GetAtt PersonalizeRole.Arn
